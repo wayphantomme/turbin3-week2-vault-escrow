@@ -73,6 +73,30 @@ Accounts and custom 1-byte discriminators:
 - The vault is the escrow's associated token account for token A.
 - Time comes from `Clock::get()?.unix_timestamp`, which is an `i64`, so `expiration` is an `i64` too.
 
+## Extension #4 — Timed escrow
+
+The `expiration` field on the `Escrow` account turns every swap into a time-locked deal.
+
+```
+make(seed, deposit, receive, expiration)
+    └── stores expiration = unix timestamp (i64) from the maker
+take
+    └── calls Clock::get()?.unix_timestamp
+        ├── if now < expiration  → swap executes
+        └── if now >= expiration → fails with EscrowExpired
+refund
+    └── no time check — the maker can always reclaim their tokens,
+        even after expiration
+update(new_receive?, new_expiration?)
+    └── lets the maker push the deadline further or adjust the price
+        while the escrow is still open
+```
+
+Key details:
+- `expiration` must be in the future at `make` time (`expiration > Clock::get()?.unix_timestamp`)
+- `new_expiration` in `update` has the same constraint
+- LiteSVM's `svm.set_sysvar(&Clock { unix_timestamp: future, .. })` is used in tests to fast-forward time and verify the guard works without waiting in real time
+
 ## Tests
 
 `cargo test` + `cargo test -p inkind_vault` runs a total of **25 tests** across all three programs:
