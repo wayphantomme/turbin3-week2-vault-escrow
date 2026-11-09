@@ -1482,6 +1482,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "inkind_vault"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "litesvm",
+ "litesvm-token",
+ "solana-keypair",
+ "solana-message",
+ "solana-pubkey 4.3.0",
+ "solana-signer",
+ "solana-transaction",
+]
+
+[[package]]
 name = "inout"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

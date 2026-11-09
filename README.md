@@ -1,11 +1,12 @@
 # Turbin3 Builders Cohort Q4 2026 — Week 2: Vault & Escrow
 
-Two Anchor programs in one workspace, tested with [LiteSVM](https://github.com/LiteSVM/litesvm).
+Three Anchor programs in one workspace, tested with [LiteSVM](https://github.com/LiteSVM/litesvm).
 
 | Program | Path | What it does |
 |---|---|---|
 | **Vault** | [`programs/q3_26_vault`](programs/q3_26_vault) | A personal SOL vault per user: `initialize`, `deposit`, `withdraw`, `close` |
 | **Escrow** | [`programs/escrowq32026`](programs/escrowq32026) | A trustless token swap with a deadline: `make`, `take`, `refund`, `update` |
+| **In-kind Vault** | [`programs/inkind_vault`](programs/inkind_vault) | Non-custodial pooled vault with share tokens and in-kind redemption (Challenge #5) |
 
 ## Assignment checklist
 
@@ -13,6 +14,7 @@ Two Anchor programs in one workspace, tested with [LiteSVM](https://github.com/L
 - [x] Escrow with `make`, `take`, `refund`, `update`
 - [x] Tests for every instruction, including failure cases (LiteSVM, Rust)
 - [x] Optional: timed escrow using the Clock sysvar (`expiration`)
+- [x] Advanced: non-custodial in-kind vault (`inkind_vault`) — pooled vault, share tokens, oracle-free pricing, exit any time regardless of idle liquidity
 
 ## Quick start
 
@@ -22,8 +24,9 @@ Requirements: Rust 1.89.0 (pinned in `rust-toolchain.toml`), Solana CLI and Anch
 git clone https://github.com/wayphantomme/turbin3-week2-vault-escrow
 cd turbin3-week2-vault-escrow
 anchor keys sync                 # only needed if program ids do not match your local keypairs
-cargo build-sbf --arch v0        # builds both programs into target/deploy
-cargo test                       # runs the LiteSVM tests of both programs
+cargo build-sbf --arch v0        # builds all three programs into target/deploy
+cargo test                       # runs the LiteSVM tests of vault and escrow
+cargo test -p inkind_vault       # runs the LiteSVM tests of the in-kind vault
 ```
 
 > The tests load the compiled `.so` files from `target/deploy`, so run `cargo build-sbf` before `cargo test`
@@ -72,9 +75,9 @@ Accounts and custom 1-byte discriminators:
 
 ## Tests
 
-`cargo test` runs:
+`cargo test` + `cargo test -p inkind_vault` runs a total of **25 tests** across all three programs:
 
-**Vault** (`programs/q3_26_vault/tests`)
+**Vault** (`programs/q3_26_vault/tests`) — 8 tests
 - full flow: initialize, deposit, withdraw, close
 - deposit of 0 fails, withdraw of 0 fails
 - withdraw more than the balance fails
@@ -83,7 +86,7 @@ Accounts and custom 1-byte discriminators:
 - close returns deposit and rent to the user
 - withdraw after close fails
 
-**Escrow** (`programs/escrowq32026/tests`)
+**Escrow** (`programs/escrowq32026/tests`) — 9 tests
 - make and refund
 - make and take (balances of both sides, accounts closed)
 - take after expiration fails (clock moved with `set_sysvar`) and the maker can still refund
@@ -91,6 +94,16 @@ Accounts and custom 1-byte discriminators:
 - update by the maker (both fields, one field, take uses the new price)
 - update by a non-maker fails, update with invalid values fails
 - make with invalid values fails
+
+**In-kind Vault** (`programs/inkind_vault/tests`) — 8 tests
+- first deposit: user gets `max_base` shares, vault locks `MINIMUM_SHARES` permanently
+- second deposit is correctly pro-rata (rounded up, no oracle)
+- full redeem returns proportional base and position tokens
+- **key case**: redeem succeeds when `base_vault` is empty — user still exits with position tokens
+- redeem of 0 shares fails
+- redeem more than balance fails
+- another user cannot burn someone else's shares
+- deposit with slippage too tight fails `SlippageExceeded`
 
 ## Challenge #5 — Non-custodial in-kind vault (`inkind_vault`)
 
@@ -180,3 +193,5 @@ After restoring `lib.rs` with `git checkout`, rebuild and retest: 9/9 escrow tes
 **The Clock sysvar** — `Clock::get()?.unix_timestamp` returns an `i64`. The expiration field in the escrow is therefore `i64`, not `u64`. LiteSVM's `set_sysvar` lets tests fast-forward the clock to trigger `test_take_after_expiration_fails` without waiting in real time.
 
 **Testing failure cases** — a test that only checks the happy path is incomplete. Commenting out `check_expiration()` and watching the test fail proved the guard does real work. Each negative test (`_fails`) uses `assert!(result.is_err())` and ideally matches the specific error variant.
+
+**Non-custodial vault design** — removing the `authority` field from state is not just cosmetic. It means no wallet can ever be the signing authority for fund movements. The only way assets leave the vault is through `redeem_in_kind`, which requires the user to burn their own shares. Locking `MINIMUM_SHARES` in the vault's own ATA (authority = vault PDA, no private key) makes the share-price inflation attack uneconomic without needing an oracle or admin role.
