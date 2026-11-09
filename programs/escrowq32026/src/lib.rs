@@ -37,11 +37,24 @@ pub mod escrowq32026 {
         ctx.accounts.deposit(deposit)
     }
 
-    //take instruction
-    //TODO:
+    #[instruction(discriminator = 1)]
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        ctx.accounts.check_expiration()?;
+        ctx.accounts.deposit()?;
+        ctx.accounts.withdraw_and_close_vault()
+    }
 
     #[instruction(discriminator = 2)]
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
         ctx.accounts.refund_and_close_vault()
+    }
+
+    #[instruction(discriminator = 3)]
+    pub fn update(
+        ctx: Context<Update>,
+        new_receive: Option<u64>,
+        new_expiration: Option<i64>,
+    ) -> Result<()> {
+        ctx.accounts.update_escrow(new_receive, new_expiration)
     }
 }

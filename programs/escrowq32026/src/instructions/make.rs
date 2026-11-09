@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{Escrow, ESCROW_SEED};
+use crate::{error::ErrorCode, Escrow, ESCROW_SEED};
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked},
@@ -55,6 +55,12 @@ impl<'info> Make<'info> {
         bumps: &MakeBumps,
         expiration: i64,
     ) -> Result<()> {
+        require!(receive > 0, ErrorCode::InvalidAmount);
+        require!(
+            expiration > Clock::get()?.unix_timestamp,
+            ErrorCode::InvalidExpiration
+        );
+
         self.escrow.set_inner(Escrow {
             seed,
             maker: self.maker.key(),
@@ -69,6 +75,8 @@ impl<'info> Make<'info> {
 
     //Deposit tokens from maker to vault
     pub fn deposit(&mut self, deposit: u64) -> Result<()> {
+        require!(deposit > 0, ErrorCode::InvalidAmount);
+
         let transfer_accounts = TransferChecked {
             from: self.maker_ata_a.to_account_info(),
             mint: self.mint_a.to_account_info(),
