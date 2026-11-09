@@ -13,8 +13,6 @@ Two Anchor programs in one workspace, tested with [LiteSVM](https://github.com/L
 - [x] Escrow with `make`, `take`, `refund`, `update`
 - [x] Tests for every instruction, including failure cases (LiteSVM, Rust)
 - [x] Optional: timed escrow using the Clock sysvar (`expiration`)
-- [ ] Screenshot of all tests passing: `docs/tests-passing.png`
-- [ ] Social post: _add link here_
 
 ## Quick start
 
@@ -94,6 +92,44 @@ Accounts and custom 1-byte discriminators:
 - update by a non-maker fails, update with invalid values fails
 - make with invalid values fails
 
+## Screenshots
+
+### Build
+
+`cargo build-sbf --arch v0` — both programs compile to `.so` (1 warning: unused import, harmless).
+
+![build](docs/screenshots/01-build.png)
+
+### Escrow tests — all 9 passed
+
+`cargo test` — escrow suite: 9 passed, 0 failed.
+
+![escrow tests](docs/screenshots/02-escrow-tests.png)
+
+### Vault tests — all 8 passed
+
+Vault suite: 8 passed, 0 failed.
+
+![vault tests](docs/screenshots/03-vault-tests.png)
+
+### Failure case — expiration check commented out
+
+`test_take_after_expiration_fails` panics when `check_expiration()` is commented out in `lib.rs`. This confirms the guard is real and the test actually catches the missing check.
+
+![failure case](docs/screenshots/04-failure-case.png)
+
+### Fixed — all tests green
+
+After restoring `lib.rs` with `git checkout`, rebuild and retest: 9/9 escrow tests pass including `test_take_after_expiration_fails`.
+
+![fixed](docs/screenshots/05-fixed.png)
+
 ## What I learned
 
-_Fill in your own words before submitting: PDAs as signers, custom discriminators, the Clock sysvar, and testing failure cases._
+**PDAs as signers** — the escrow PDA owns the vault token account, so it can sign the transfer to the taker without any private key. The vault PDA does the same for the SOL vault. Getting the seeds and bumps right, and passing them through `invoke_signed`, is the core mechanic of both programs.
+
+**Custom 1-byte discriminators** — Anchor's default 8-byte discriminator can be overridden with `#[instruction(discriminator = N)]`. Smaller on-chain footprint and a useful exercise in understanding how the router distinguishes instructions.
+
+**The Clock sysvar** — `Clock::get()?.unix_timestamp` returns an `i64`. The expiration field in the escrow is therefore `i64`, not `u64`. LiteSVM's `set_sysvar` lets tests fast-forward the clock to trigger `test_take_after_expiration_fails` without waiting in real time.
+
+**Testing failure cases** — a test that only checks the happy path is incomplete. Commenting out `check_expiration()` and watching the test fail proved the guard does real work. Each negative test (`_fails`) uses `assert!(result.is_err())` and ideally matches the specific error variant.
