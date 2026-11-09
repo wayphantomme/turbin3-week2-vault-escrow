@@ -92,6 +92,47 @@ Accounts and custom 1-byte discriminators:
 - update by a non-maker fails, update with invalid values fails
 - make with invalid values fails
 
+## Challenge #5 — Non-custodial in-kind vault (`inkind_vault`)
+
+> **Program:** [`programs/inkind_vault`](programs/inkind_vault)
+
+### Design
+
+A pooled vault that holds two assets — a **base token** (liquid, e.g. USDC) and a **position token** (market receipt, e.g. an LP or lending receipt) — and issues fungible **share tokens** as claims against both.
+
+| Property | How it is enforced |
+|---|---|
+| Non-custodial | No `authority` field in state. The only signer that can move assets out is the vault PDA, and only inside `redeem_in_kind` after burning shares |
+| Redeem in kind | Output = pro-rata slice of **both** base and position, atomically |
+| No liquidity requirement | No idle-balance check. If `base_vault` is empty the user still receives their share of position tokens and can unwind the market themselves |
+| Exit any time | No pause, lockup, cooldown, or admin gate |
+| Oracle-free pricing | Deposit cost = `ceil(shares × balance / supply)` — pure on-chain arithmetic |
+| Anti-inflation attack | First deposit mints `MINIMUM_SHARES` to the vault's own ATA (authority = vault PDA, no private key). Those shares are permanently locked — no one can sign a burn for that account. This raises the cost of a share-price inflation attack from near-zero to at least `MINIMUM_SHARES` units of base token |
+
+### Instructions
+
+| Instruction | Parameters | Behaviour |
+|---|---|---|
+| `initialize` | — | Creates the vault state, share mint (authority = vault PDA), and two vault-owned ATAs |
+| `deposit(shares, max_base, max_position)` | `shares` ignored on first deposit | First call sets the ratio; later calls compute required amounts pro-rata (rounded up). Rejects if required > max |
+| `redeem_in_kind(shares)` | — | Burns shares, transfers `floor(shares × balance / supply)` of each asset to the caller. ATAs created with `init_if_needed` |
+
+### Trust assumptions (be honest in production)
+
+1. **Program must be made immutable after deploy.** If the upgrade authority is still held, the logic can be changed. Run `solana program set-upgrade-authority <PROGRAM_ID> --final` after deployment.
+2. **Mint freeze authority.** If the base or position mint has a freeze authority (e.g. USDC), the issuer can freeze the vault's ATA. This is outside the program's control and should be disclosed to users.
+
+### Tests (`programs/inkind_vault/tests/test_inkind_vault.rs`)
+
+1. First deposit mints `max_base` shares to user + `MINIMUM_SHARES` to vault's own locked ATA; vault holds full deposit
+2. Second deposit is correctly pro-rata (rounded up)
+3. Full redeem returns proportional base and position tokens
+4. **Key case**: redeem succeeds even when `base_vault` balance is zero — user receives position tokens and exits without idle liquidity
+5. Redeem of 0 shares fails
+6. Redeem more than balance fails
+7. Another user cannot burn someone else's shares
+8. Deposit with `max_*` too tight fails `SlippageExceeded`
+
 ## Screenshots
 
 ### Build
@@ -123,6 +164,12 @@ Vault suite: 8 passed, 0 failed.
 After restoring `lib.rs` with `git checkout`, rebuild and retest: 9/9 escrow tests pass including `test_take_after_expiration_fails`.
 
 ![fixed](docs/screenshots/05-fixed.png)
+
+### In-kind vault tests — all 8 passed
+
+`cargo test -p inkind_vault` — 8 passed, 0 failed.
+
+![inkind vault tests](docs/screenshots/06-inkind-vault-tests.png)
 
 ## What I learned
 

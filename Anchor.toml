@@ -8,6 +8,7 @@ skip-lint = false
 
 [programs.localnet]
 escrowq32026 = "BNCecVXTGKcwRLXhumugK6s79WqqKiPMjbEUnmxzfX9y"
+inkind_vault = "8wFAf6dxDpufjnjWXJcqC6AoptqYdCKRvDkrAuZYhDiT"
 q3_26_vault = "DvQFrmrm4AUwYe2aH7L84oCXkQVvZdWXhfj6Lp69pPea"
 
 [provider]
